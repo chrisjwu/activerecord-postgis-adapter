@@ -48,12 +48,13 @@ module ActiveRecord
 
           def spatial_factory
             @spatial_factory ||=
-              RGeo::ActiveRecord::SpatialFactoryStore.instance.factory(
-                geo_type: @geo_type,
-                has_m:    @has_m,
-                has_z:    @has_z,
-                sql_type: @sql_type,
-                srid:     @srid
+              RGeo::Geos::CAPIFactory.new(
+                wkt_parser:       :geos,
+                wkb_parser:       :geos,
+                geo_type:         @geo_type,
+                has_m_coordinate: @has_m,
+                has_z_coordinate: @has_z,
+                srid:             @srid
               )
           end
 
@@ -86,27 +87,24 @@ module ActiveRecord
 
           def cast_value(value)
             return if value.nil?
-            String === value ? parse_wkt(value) : value
-          end
-
-          # convert WKT string into RGeo object
-          def parse_wkt(string)
-            wkt_parser(string).parse(string)
-          rescue RGeo::Error::ParseError
-            nil
+            String === value ? parse(value) : value
           end
 
           def binary_string?(string)
             string[0] == "\x00" || string[0] == "\x01" || string[0, 4] =~ /[0-9a-fA-F]{4}/
           end
 
-          def wkt_parser(string)
+          # convert WKT/WKB string into RGeo object
+          def parse(string)
             if binary_string?(string)
-              RGeo::WKRep::WKBParser.new(spatial_factory, support_ewkb: true, default_srid: @srid)
+              spatial_factory.parse_wkb(string)
             else
-              RGeo::WKRep::WKTParser.new(spatial_factory, support_ewkt: true, default_srid: @srid)
+              spatial_factory.parse_wkt(string)
             end
+          rescue RGeo::Error::ParseError
+            nil
           end
+
         end
       end
     end
